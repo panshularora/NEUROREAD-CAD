@@ -1,0 +1,9 @@
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+src/components/learning/ModuleComprehension.tsx(19,55): error TS6133: 'childId' is declared but its value is never read.
+src/components/learning/ModulePhonics.tsx(15,49): error TS6133: 'childId' is declared but its value is never read.
+src/components/learning/ModuleReading.tsx(15,49): error TS6133: 'childId' is declared but its value is never read.
+src/components/learning/ModuleSpelling.tsx(14,7): error TS6133: 'SCRAMBLED' is declared but its value is never read.
+src/components/learning/ModuleSpelling.tsx(16,50): error TS6133: 'childId' is declared but its value is never read.

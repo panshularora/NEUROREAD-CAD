@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neuroread | Reading, Reimagined</title>
+<link rel="stylesheet" href="https://fonts.cdnfonts.com/css/opendyslexic">
+<script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: { moss:'#2E4036', clay:'#CC5833', cream:'#F2F0E9', charcoal:'#1A1A1A' },
+      fontFamily: {
+        sans:['"OpenDyslexic"','sans-serif'], display:['"OpenDyslexic"','sans-serif'],
+        serif:['"OpenDyslexic"','sans-serif'], mono:['"OpenDyslexic Mono"','"OpenDyslexic"','monospace'],
+        inter:['"OpenDyslexic"','sans-serif'], playfair:['"OpenDyslexic"','sans-serif']
+      },
+      transitionTimingFunction: { 'spring':'cubic-bezier(0.34,1.56,0.64,1)' }
+    }
+  }
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<style>
+  *{font-family:'OpenDyslexic',sans-serif!important}
+  .iconify{display:inline-block;vertical-align:middle;width:1.5rem;height:1.5rem}
+  .text-xl.iconify{width:1.25rem;height:1.25rem}
+  .text-2xl.iconify{width:1.5rem;height:1.5rem}
+  .noise-overlay{position:fixed;inset:0;z-index:9999;pointer-events:none;background-image:url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)"/%3E%3C/svg%3E');opacity:.05;mix-blend-mode:multiply}
+  ::-webkit-scrollbar{width:0;background:transparent}
+  .word-wrap{display:inline-block;overflow:hidden}
+  .word-inner{display:inline-block;transform:translateY(100%)}
+  .magnetic-btn{position:relative;overflow:hidden;transition:transform .3s cubic-bezier(.25,1,.5,1)}
+  .magnetic-btn::before{content:'';position:absolute;top:100%;left:0;width:100%;height:100%;background:rgba(0,0,0,.1);transition:top .3s cubic-bezier(.25,1,.5,1);z-index:0}
+  .magnetic-btn:hover{transform:scale(1.02)}
+  .magnetic-btn:hover::before{top:0}
+  .magnetic-btn>*{position:relative;z-index:1}
+
+  /* ── MODAL ── */
+  #simplifier-modal{display:none;position:fixed;inset:0;z-index:10000;background:rgba(26,26,26,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:1rem}
+  #simplifier-modal.open{display:flex}
+  .modal-box{background:#F2F0E9;border-radius:2rem;width:100%;max-width:1200px;max-height:92vh;overflow-y:auto;box-shadow:0 40px 80px -20px rgba(0,0,0,.4);animation:modalIn .4s cubic-bezier(.34,1.56,.64,1) both}
+  @keyframes modalIn{from{opacity:0;transform:scale(.92) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+  /* shimmer */
+  .shimmer{background:linear-gradient(90deg,rgba(46,64,54,.06) 25%,rgba(46,64,54,.12) 50%,rgba(46,64,54,.06) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:.5rem;height:1rem;margin-bottom:.5rem}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* open badge on smart simplifier card */
+  .open-badge{opacity:0;transform:translateY(4px);transition:all .2s ease;display:inline-flex;align-items:center;gap:6px;background:#2E4036;color:#F2F0E9;padding:4px 12px;border-radius:100px;font-size:.65rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;margin-top:12px}
+  .clickable-card:hover .open-badge{opacity:1;transform:translateY(0)}
+  .clickable-card{cursor:pointer}
+
+  /* waveform */
+  @keyframes wave{0%,100%{height:6px}50%{height:18px}}
+  .bar1{animation:wave .8s ease-in-out infinite}
+  .bar2{animation:wave .8s ease-in-out infinite .15s}
+  .bar3{animation:wave .8s ease-in-out infinite .3s}
+  .bar4{animation:wave .8s ease-in-out infinite .45s}
+  .bar5{animation:wave .8s ease-in-out infinite .6s}
+  .wave-bars{display:none;align-items:center;gap:3px;height:20px}
+  .wave-bars.playing{display:flex}
+  .wave-bar{width:4px;background:#2E4036;border-radius:2px}
+
+  /* history accordion */
+  .history-row-body{display:none;padding:1rem 1.5rem 1.25rem;background:#fff;border-top:1px solid rgba(46,64,54,.06);border-radius:0 0 1rem 1rem}
+  .history-row-body.open{display:block}
+  .history-chevron{transition:transform .3s ease}
+  .history-row.expanded .history-chevron{transform:rotate(180deg)}
+</style>
+</head>
+<body class="bg-cream text-charcoal font-sans antialiased overflow-x-hidden selection:bg-moss selection:text-cream">
+<div class="noise-overlay"></div>
+
+<!-- ══════════ SMART SIMPLIFIER MODAL ══════════ -->
+<div id="simplifier-modal">
+  <div class="modal-box">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-8 pt-7 pb-5 border-b border-moss/10">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-moss flex items-center justify-center">
+          <span class="iconify text-cream" data-icon="solar:magic-stick-3-linear" style="width:1.1rem;height:1.1rem"></span>
+        </div>
+        <div>
+          <h2 class="font-medium text-lg text-charcoal leading-none">Smart Simplifier</h2>
+          <p class="text-xs text-charcoal/50 mt-0.5">AI-powered cognitive load reduction</p>
+        </div>
+      </div>
+      <button onclick="closeSimplifier()" class="w-9 h-9 rounded-full bg-moss/8 hover:bg-moss/15 flex items-center justify-center transition-colors border border-moss/10">
+        <span class="iconify text-charcoal/60" data-icon="solar:close-linear" style="width:1.1rem;height:1.1rem"></span>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-0">
+
+      <!-- LEFT: Simplifier input (3 cols) -->
+      <div class="lg:col-span-3 p-6 md:p-8 border-r border-moss/10">
+        <h3 class="font-medium text-base text-charcoal mb-1">Text Simplifier</h3>
+        <p class="text-xs text-charcoal/50 mb-5">Paste or type text to analyse and simplify according to your reading profile.</p>
+
+        <div class="grid grid-cols-2 gap-3 mb-2">
+          <div>
+            <label class="text-[10px] font-medium text-charcoal/50 uppercase tracking-wider block mb-1.5">User ID</label>
+            <input id="user-id-input" type="text" value="demo-user-001" class="w-full rounded-xl border border-moss/15 bg-white px-4 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-moss/20"/>
+          </div>
+          <div>
+            <label class="text-[10px] font-medium text-charcoal/50 uppercase tracking-wider block mb-1.5">Reading Profile</label>
+            <select id="profile-select" class="w-full rounded-xl border border-moss/15 bg-white px-4 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-moss/20 appearance-none">
+              <option>Default</option>
+              <option>Dyslexia Support</option>
+              <option>ADHD Mode</option>
+              <option>Technical Expert</option>
+            </select>
+          </div>
+        </div>
+        <p class="text-[11px] text-charcoal/40 mb-5">Used to fetch your long-term cognitive progress.</p>
+
+        <label class="text-[10px] font-medium text-charcoal/50 uppercase tracking-wider block mb-1.5">Text to Simplify</label>
+        <textarea id="input-text" rows="9" placeholder="Paste or type text that may be cognitively demanding...&#10;Press Ctrl/⌘ + Enter to simplify." class="w-full rounded-xl border border-moss/15 bg-white px-4 py-3 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-moss/20 placeholder-charcoal/30 resize-y leading-relaxed"></textarea>
+
+        <div class="flex items-center justify-between mt-4 flex-wrap gap-3">
+          <div class="flex items-center gap-2">
+            <button id="dyslexia-btn" onclick="toggleDyslexia()" class="px-4 py-2 rounded-full border border-moss/20 text-xs font-medium text-charcoal hover:bg-moss hover:text-cream transition-all">Dyslexia mode</button>
+            <button id="audio-btn" onclick="toggleAudio()" class="px-4 py-2 rounded-full border border-moss/20 text-xs font-medium text-charcoal hover:bg-moss hover:text-cream transition-all flex items-center gap-2">
+              <div class="wave-bars" id="wave-bars">
+                <div class="wave-bar bar1"></div><div class="wave-bar bar2"></div>
+                <div class="wave-bar bar3"></div><div class="wave-bar bar4"></div><div class="wave-bar bar5"></div>
+              </div>
+              Audio mode
+            </button>
+          </div>
+          <button onclick="runSimplifier()" id="simplify-btn" class="magnetic-btn px-6 py-2.5 rounded-full bg-clay text-cream text-xs font-medium uppercase tracking-wide">
+            <span>Simplify text</span>
+          </button>
+        </div>
+
+        <!-- Adapted Reading View -->
+        <div class="mt-6 border border-moss/10 rounded-2xl overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-3 bg-white border-b border-moss/8">
+            <h4 class="text-xs font-medium text-charcoal uppercase tracking-wider">Adapted Reading View</h4>
+            <button id="dyslexia-badge" onclick="toggleDyslexia()" class="text-[10px] px-3 py-1 rounded-full bg-moss/8 text-moss font-medium hover:bg-moss hover:text-cream transition-all">Dyslexia Mode</button>
+          </div>
+          <div class="px-5 py-4 bg-white">
+            <p class="text-[10px] font-medium text-charcoal/40 uppercase tracking-wider mb-3">Simplified Content</p>
+            <div id="simplified-output" class="min-h-[80px] rounded-xl bg-moss/6 border border-moss/10 px-5 py-4 text-sm text-charcoal/70 leading-relaxed italic">
+              Simplified text will appear here once you run an analysis.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Cognitive Load Overview (2 cols) -->
+      <div class="lg:col-span-2 p-6 md:p-8 bg-moss/[0.03]">
+        <h3 class="font-medium text-base text-charcoal mb-1">Cognitive Load Overview</h3>
+        <div class="w-12 h-px bg-moss/20 mb-5"></div>
+
+        <!-- Cognitive Score -->
+        <div class="rounded-2xl bg-white border border-moss/10 p-5 mb-4">
+          <p class="text-[10px] font-medium text-charcoal/40 uppercase tracking-wider mb-3">Cognitive Score</p>
+          <div class="flex items-center justify-between">
+            <div id="score-badge" class="text-xs font-medium px-3 py-1 rounded-full bg-charcoal/8 text-charcoal/50 border border-charcoal/10">PENDING</div>
+            <div class="flex items-baseline gap-1">
+              <span id="score-val" class="text-2xl font-medium text-charcoal">—</span>
+              <span class="text-sm text-charcoal/40">/ 100</span>
+            </div>
+          </div>
+          <div class="mt-3 h-1.5 rounded-full bg-moss/10 overflow-hidden">
+            <div id="score-bar" class="h-full rounded-full bg-moss transition-all duration-1000" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div class="rounded-2xl bg-clay/8 border border-clay/15 p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="iconify text-charcoal/60" data-icon="solar:clock-circle-linear" style="width:1rem;height:1rem"></span>
+              <span class="text-[10px] font-medium text-charcoal/50 uppercase tracking-wider">Reading Time</span>
+            </div>
+            <p id="reading-time-val" class="text-xl font-medium text-charcoal mt-1">—</p>
+            <div class="w-6 h-0.5 bg-charcoal/20 mt-2 rounded-full"></div>
+          </div>
+          <div class="rounded-2xl bg-clay/8 border border-clay/15 p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="iconify text-charcoal/60" data-icon="solar:graph-linear" style="width:1rem;height:1rem"></span>
+              <span class="text-[10px] font-medium text-charcoal/50 uppercase tracking-wider">Difficulty</span>
+            </div>
+            <p id="difficulty-val" class="text-xl font-medium text-charcoal mt-1">—</p>
+            <div class="w-6 h-0.5 bg-charcoal/20 mt-2 rounded-full"></div>
+          </div>
+        </div>
+
+        <!-- Reduction -->
+        <div class="rounded-2xl bg-clay/8 border border-clay/15 p-4 mb-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="iconify text-charcoal/60" data-icon="solar:bolt-linear" style="width:1rem;height:1rem"></span>
+            <span class="text-[10px] font-medium text-charcoal/50 uppercase tracking-wider">Reduction</span>
+          </div>
+          <p id="reduction-val" class="text-xl font-medium text-charcoal mt-1">—</p>
+          <div class="w-6 h-0.5 bg-charcoal/20 mt-2 rounded-full"></div>
+        </div>
+
+        <!-- Intensity -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-[11px] text-moss font-medium">Cognitive Load Intensity</p>
+            <span id="intensity-val" class="text-[11px] text-charcoal/40">—</span>
+          </div>
+          <div class="h-2 rounded-full bg-moss/10 overflow-hidden">
+            <div id="intensity-bar" class="h-full rounded-full bg-gradient-to-r from-moss/60 to-clay transition-all duration-1000" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Impact Summary -->
+        <div class="rounded-2xl bg-white border border-moss/10 p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="iconify text-moss" data-icon="solar:lightbulb-linear" style="width:1.1rem;height:1.1rem"></span>
+            <h4 class="text-sm font-medium text-charcoal">Impact Summary</h4>
+          </div>
+          <p id="impact-summary" class="text-xs text-charcoal/60 leading-relaxed">Run a simplification to see the cognitive impact analysis and personalised recommendations.</p>
+        </div>
+
+        <!-- Keywords -->
+        <div id="keywords-section" class="mt-4" style="display:none">
+          <p class="text-[10px] font-medium text-charcoal/40 uppercase tracking-wider mb-2">Key Terms Detected</p>
+          <div id="keywords-list" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ NAVBAR ══════════ -->
+<nav id="navbar" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 rounded-full px-6 py-3 flex items-center justify-between w-[90%] max-w-5xl border bg-transparent text-cream border-transparent">
+  <div class="uppercase text-sm font-medium tracking-[0.2em]">N e u r o r e a d</div>
+  <div class="hidden md:flex items-center gap-8 font-medium text-xs tracking-wide uppercase">
+    <a href="#modes" onclick="switchMode('assistive')" class="hover:opacity-70 transition-opacity">ASSIST</a>
+    <a href="#modes" onclick="switchMode('learning')" class="hover:opacity-70 transition-opacity">LEARNING</a>
+  </div>
+</nav>
+
+<!-- ══════════ HERO ══════════ -->
+<header class="relative h-[100dvh] w-full overflow-hidden flex items-end">
+  <div class="absolute inset-0 w-full h-full">
+    <img src="https://images.unsplash.com/photo-1470115636492-6d2b56f9146d?q=80&w=2070&auto=format&fit=crop" class="w-full h-full object-cover object-center" alt="Dark Forest">
+    <div class="bg-gradient-to-b from-moss/40 via-moss/80 to-charcoal absolute top-0 right-0 bottom-0 left-0"></div>
+  </div>
+  <div class="relative z-10 w-full max-w-7xl mx-auto px-6 pb-24 md:pb-32">
+    <div class="max-w-4xl hero-content">
+      <h1 class="flex flex-col gap-2">
+        <span class="hero-anim md:text-7xl lg:text-[6rem] text-cream leading-none text-5xl font-medium tracking-tighter mt-2">Reading, Reimagined</span>
+        <span class="hero-anim md:text-8xl lg:text-[8rem] text-cream leading-none text-6xl font-medium tracking-tight mt-2 pr-4 italic">for Every Mind..</span>
+      </h1>
+      <p class="hero-anim text-cream/70 md:text-base leading-relaxed text-sm max-w-md mt-10">AI that adapts reading for every mind — helping children learn and adults understand complex text with ease.</p>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════ IMPACT ══════════ -->
+<section id="impact" class="py-32 bg-cream relative z-20 rounded-t-[3rem] -mt-10 overflow-hidden">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="mb-20">
+      <span class="font-mono text-xs text-moss uppercase tracking-wider block mb-3">The Mission</span>
+      <h2 class="md:text-5xl text-charcoal text-4xl font-medium tracking-tight max-w-2xl">How It Works &amp; Community Impact</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="impact-card col-span-1 md:col-span-2 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col relative overflow-hidden group transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] opacity-0">
+        <div class="flex items-center gap-4 mb-6 relative z-10">
+          <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center border border-moss/5">
+            <span class="iconify text-xl text-moss" data-icon="solar:scanner-linear" data-inline="false"></span>
+          </div>
+          <h3 class="font-medium text-2xl md:text-3xl tracking-tight text-charcoal">Dynamic Adaptation</h3>
+        </div>
+        <p class="text-charcoal/70 text-base md:text-lg leading-relaxed max-w-lg relative z-10 mt-auto">AI that instantly simplifies complex text and adjusts typography based on the reader's unique cognitive needs.</p>
+      </div>
+      <div class="impact-card col-span-1 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col relative overflow-hidden group transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] opacity-0">
+        <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center border border-moss/5 mb-6">
+          <span class="iconify text-xl text-moss" data-icon="solar:layers-minimalistic-linear" data-inline="false"></span>
+        </div>
+        <h3 class="font-medium text-xl md:text-2xl tracking-tight text-charcoal mb-4">Multi-Modal Processing</h3>
+        <p class="text-charcoal/70 text-sm leading-relaxed mt-auto">Seamlessly integrates Text-to-Speech, keyword extraction, and visual phonics on the fly without breaking focus.</p>
+      </div>
+      <div class="impact-card col-span-1 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col relative overflow-hidden group transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] opacity-0">
+        <div class="number-reveal font-medium text-6xl text-moss mb-6 leading-none inline-block" style="filter:blur(10px)">1 in 5</div>
+        <h3 class="font-medium text-xl tracking-tight text-charcoal mb-3">Dyslexia Support</h3>
+        <p class="text-charcoal/70 text-sm leading-relaxed mt-auto">Empowering individuals globally with dyslexia by providing frictionless, low-stress reading environments.</p>
+      </div>
+      <div class="impact-card col-span-1 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col relative overflow-hidden group transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] opacity-0">
+        <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center border border-moss/5 mb-6">
+          <span class="iconify text-xl text-clay" data-icon="solar:diploma-linear" data-inline="false"></span>
+        </div>
+        <h3 class="font-medium text-xl tracking-tight text-charcoal mb-3">Educational Equity</h3>
+        <p class="text-charcoal/70 text-sm leading-relaxed mt-auto">Giving early learners and children the interactive phonics and spelling tools they need to build confidence.</p>
+      </div>
+      <div class="impact-card col-span-1 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col relative overflow-hidden group transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] opacity-0">
+        <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center border border-moss/5 mb-6">
+          <span class="iconify text-xl text-moss" data-icon="solar:earth-linear" data-inline="false"></span>
+        </div>
+        <h3 class="font-medium text-xl tracking-tight text-charcoal mb-3">Universal Accessibility</h3>
+        <p class="text-charcoal/70 text-sm leading-relaxed mt-auto">Democratizing access to dense legal, medical, and technical documents for the general public.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ MODES ══════════ -->
+<section id="modes" class="py-24 bg-cream relative z-20 overflow-hidden">
+  <div class="max-w-7xl mr-auto ml-auto pr-6 pl-6">
+    <div class="flex justify-center mb-16">
+      <div class="bg-moss/5 p-1 rounded-full inline-flex relative shadow-inner" id="mode-tabs">
+        <div class="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white rounded-full shadow-sm transition-transform duration-500 ease-spring" id="tab-indicator"></div>
+        <button onclick="switchMode('assistive')" class="relative z-10 px-6 md:px-10 py-3 rounded-full text-xs md:text-sm font-medium tracking-wide transition-colors text-charcoal w-40 md:w-56 text-center" id="tab-assistive">Assistive Mode</button>
+        <button onclick="switchMode('learning')" class="md:px-10 md:text-sm transition-colors text-charcoal/40 hover:text-charcoal/80 md:w-56 text-xs font-medium tracking-wide text-center w-40 z-10 rounded-full pt-3 pr-6 pb-3 pl-6 relative" id="tab-learning">Learning Mode</button>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr;grid-template-rows:1fr">
+
+      <!-- Assistive Mode -->
+      <div id="content-assistive" class="col-start-1 row-start-1 transition-all duration-700 ease-spring opacity-100 translate-y-0 z-10">
+        <div class="mb-12 text-center max-w-2xl mx-auto">
+          <span class="font-mono text-xs text-clay uppercase tracking-wider mb-4 block">System 01</span>
+          <h2 class="font-medium text-4xl tracking-tight text-charcoal mb-4">Assistive Mode</h2>
+          <p class="text-charcoal/70 text-sm md:text-base leading-relaxed">For adults and complex text. <span class="italic text-moss text-lg">Enhance comprehension</span> and reduce cognitive load with real-time semantic manipulation.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-6">
+
+          <!-- ★ SMART SIMPLIFIER — clickable -->
+          <div onclick="openSimplifier()" class="clickable-card col-span-1 md:col-span-3 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.2)] hover:border-moss/30 group relative">
+            <div class="w-14 h-14 rounded-full bg-cream flex items-center justify-center mb-8 border border-moss/5 group-hover:scale-105 transition-transform group-hover:bg-moss group-hover:border-moss">
+              <span class="iconify text-2xl text-moss group-hover:text-cream" data-icon="solar:magic-stick-3-linear" data-inline="false"></span>
+            </div>
+            <h3 class="font-medium text-2xl tracking-tight text-charcoal mb-3">Smart Simplifier</h3>
+            <p class="text-sm text-charcoal/60 leading-relaxed max-w-sm">Transform complex jargon into clear, accessible language in real-time. Uncover the underlying meaning instantly.</p>
+            <div class="open-badge">
+              <span class="iconify" data-icon="solar:arrow-right-linear" style="width:.7rem;height:.7rem"></span>
+              Open Tool
+            </div>
+          </div>
+
+          <div class="col-span-1 md:col-span-3 border border-moss/10 rounded-[2rem] p-8 md:p-10 bg-white flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] group">
+            <div class="w-14 h-14 rounded-full bg-cream flex items-center justify-center mb-8 border border-moss/5 group-hover:scale-105 transition-transform">
+              <span class="iconify text-2xl text-moss" data-icon="solar:minimize-square-linear" data-inline="false"></span>
+            </div>
+            <h3 class="font-medium text-2xl tracking-tight text-charcoal mb-3">Instant Summarizer</h3>
+            <p class="text-sm text-charcoal/60 leading-relaxed max-w-sm">Extract the core message. Get the TL;DR of any dense clinical, legal, or technical document instantly.</p>
+          </div>
+
+          <div class="col-span-1 md:col-span-2 border border-moss/10 rounded-[2rem] p-8 bg-white flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] group">
+            <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center mb-6 border border-moss/5 group-hover:scale-105 transition-transform">
+              <span class="iconify text-xl text-moss" data-icon="solar:key-linear" data-inline="false"></span>
+            </div>
+            <h3 class="font-medium text-xl tracking-tight text-charcoal mb-2">Keyword Extraction</h3>
+            <p class="text-sm text-charcoal/60 leading-relaxed">Identify and define crucial terms dynamically as you read.</p>
+          </div>
+
+          <div class="col-span-1 md:col-span-2 border border-moss/10 rounded-[2rem] p-8 bg-white flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] group">
+            <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center mb-6 border border-moss/5 group-hover:scale-105 transition-transform">
+              <span class="iconify text-xl text-moss" data-icon="solar:volume-loud-linear" data-inline="false"></span>
+            </div>
+            <h3 class="font-medium text-xl tracking-tight text-charcoal mb-2">Natural Voice TTS</h3>
+            <p class="text-sm text-charcoal/60 leading-relaxed">Listen to any text with our fluid, human-like Text-to-Speech engine.</p>
+          </div>
+
+          <div class="col-span-1 md:col-span-2 border border-moss/10 rounded-[2rem] p-8 bg-white flex flex-col transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_15px_40px_-15px_rgba(46,64,54,0.15)] group">
+            <div class="w-12 h-12 rounded-full bg-cream flex items-center justify-center mb-6 border border-moss/5 group-hover:scale-105 transition-transform">
+              <span class="iconify text-xl text-moss" data-icon="solar:settings-linear" data-inline="false"></span>
+            </div>
+            <h3 class="font-medium text-xl tracking-tight text-charcoal mb-2">Accessibility Prefs</h3>
+            <p class="text-sm text-charcoal/60 leading-relaxed">Customizable fonts, contrast ratios, and spacing presets.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Learning Mode -->
+      <div id="content-learning" class="col-start-1 row-start-1 transition-all duration-700 ease-spring opacity-0 translate-y-8 z-0 pointer-events-none">
+        <div class="bg-charcoal rounded-[3rem] p-8 md:p-14 shadow-2xl relative overflow-hidden h-full">
+          <div class="absolute inset-0 z-0 bg-moss/5 mix-blend-multiply border border-cream/5 rounded-[3rem]"></div>
+          <div class="relative z-10">
+            <div class="mb-12 text-center max-w-2xl mx-auto">
+              <span class="font-mono text-xs text-clay uppercase tracking-wider mb-4 block">System 02</span>
+              <h2 class="font-medium text-4xl tracking-tight text-cream mb-4">Learning Mode</h2>
+              <p class="text-cream/70 text-sm md:text-base leading-relaxed">For early readers. <span class="italic text-clay text-lg">Playful yet clinical precision</span> to build fundamental literacy skills effortlessly.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="border border-cream/5 bg-cream/[0.03] rounded-[2rem] p-8 flex flex-col md:flex-row gap-6 items-start transition-all duration-300 hover:-translate-y-2 hover:bg-cream/[0.06] group">
+                <div class="w-14 h-14 shrink-0 rounded-2xl bg-clay/10 flex items-center justify-center group-hover:scale-105 transition-transform border border-clay/20">
+                  <span class="iconify text-2xl text-clay" data-icon="solar:microphone-3-linear" data-inline="false"></span>
+                </div>
+                <div><h3 class="font-medium text-2xl tracking-tight text-cream mb-2">Interactive Phonics</h3><p class="text-sm text-cream/50 leading-relaxed">Break down words into sounds. Real-time visual and auditory feedback designed for developing minds.</p></div>
+              </div>
+              <div class="border border-cream/5 bg-cream/[0.03] rounded-[2rem] p-8 flex flex-col md:flex-row gap-6 items-start transition-all duration-300 hover:-translate-y-2 hover:bg-cream/[0.06] group">
+                <div class="w-14 h-14 shrink-0 rounded-2xl bg-clay/10 flex items-center justify-center group-hover:scale-105 transition-transform border border-clay/20">
+                  <span class="iconify text-2xl text-clay" data-icon="solar:pen-new-square-linear" data-inline="false"></span>
+                </div>
+                <div><h3 class="font-medium text-2xl tracking-tight text-cream mb-2">Spelling Trainer</h3><p class="text-sm text-cream/50 leading-relaxed">Gamified spelling practice that algorithmically adapts to the child's unique learning curve.</p></div>
+              </div>
+              <div class="border border-cream/5 bg-cream/[0.03] rounded-[2rem] p-8 flex flex-col md:flex-row gap-6 items-start transition-all duration-300 hover:-translate-y-2 hover:bg-cream/[0.06] group">
+                <div class="w-14 h-14 shrink-0 rounded-2xl bg-clay/10 flex items-center justify-center group-hover:scale-105 transition-transform border border-clay/20">
+                  <span class="iconify text-2xl text-clay" data-icon="solar:brain-linear" data-inline="false"></span>
+                </div>
+                <div><h3 class="font-medium text-2xl tracking-tight text-cream mb-2">Comprehension Lab</h3><p class="text-sm text-cream/50 leading-relaxed">Engaging mini-quizzes and interactive exercises to verify deep understanding after every chapter.</p></div>
+              </div>
+              <div class="border border-cream/5 bg-cream/[0.03] rounded-[2rem] p-8 flex flex-col md:flex-row gap-6 items-start transition-all duration-300 hover:-translate-y-2 hover:bg-cream/[0.06] group">
+                <div class="w-14 h-14 shrink-0 rounded-2xl bg-clay/10 flex items-center justify-center group-hover:scale-105 transition-transform border border-clay/20">
+                  <span class="iconify text-2xl text-clay" data-icon="solar:book-bookmark-linear" data-inline="false"></span>
+                </div>
+                <div><h3 class="font-medium text-2xl tracking-tight text-cream mb-2">Guided Reading</h3><p class="text-sm text-cream/50 leading-relaxed">Step-by-step scrolling storymode that builds words dynamically (e.g., A - P - P - L - E).</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ HISTORY ══════════ -->
+<section id="history" class="py-24 bg-cream relative z-20 border-t border-moss/8">
+  <div class="max-w-5xl mx-auto px-6">
+    <div class="flex items-start justify-between mb-12 flex-wrap gap-4">
+      <div>
+        <span class="font-mono text-xs text-moss uppercase tracking-wider block mb-3">Your Progress</span>
+        <h2 class="md:text-5xl text-charcoal text-4xl font-medium tracking-tight">Session History</h2>
+        <p class="text-charcoal/50 text-sm mt-2">Past simplification sessions and cognitive improvement over time.</p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap mt-2">
+        <div class="flex items-center gap-2 bg-white border border-moss/10 rounded-full px-4 py-2 text-xs">
+          <span class="w-2 h-2 rounded-full bg-moss"></span>
+          <span class="text-charcoal/60">7 sessions</span>
+        </div>
+        <div class="flex items-center gap-2 bg-white border border-moss/10 rounded-full px-4 py-2 text-xs">
+          <span class="w-2 h-2 rounded-full bg-clay"></span>
+          <span class="text-charcoal/60">Avg reduction 45%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sparkline chart -->
+    <div class="bg-white border border-moss/10 rounded-[2rem] p-6 mb-8">
+      <p class="text-[10px] font-medium text-charcoal/40 uppercase tracking-wider mb-4">Cognitive Score Over Time (Original → Simplified)</p>
+      <div class="flex items-end gap-2 h-20">
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-moss/25 hover:bg-moss/50 transition-colors cursor-default" style="height:78%" title="Session 1: 78→42"></div><span class="text-[9px] text-charcoal/40">Feb 27</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-moss/25 hover:bg-moss/50 transition-colors cursor-default" style="height:65%"></div><span class="text-[9px] text-charcoal/40">Feb 26</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-clay/50 hover:bg-clay/70 transition-colors cursor-default" style="height:82%"></div><span class="text-[9px] text-charcoal/40">Feb 28</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-moss/25 hover:bg-moss/50 transition-colors cursor-default" style="height:74%"></div><span class="text-[9px] text-charcoal/40">Feb 28</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-moss/25 hover:bg-moss/50 transition-colors cursor-default" style="height:69%"></div><span class="text-[9px] text-charcoal/40">Feb 28</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-moss/25 hover:bg-moss/50 transition-colors cursor-default" style="height:71%"></div><span class="text-[9px] text-charcoal/40">Feb 28</span></div>
+        <div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-moss/35 hover:bg-moss/60 transition-colors cursor-default" style="height:76%"></div><span class="text-[9px] text-charcoal/40">Feb 28</span></div>
+      </div>
+    </div>
+
+    <!-- Accordion list -->
+    <div class="space-y-3" id="history-list">
+
+      <!-- helper macro: each row -->
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-moss/8 flex items-center justify-center"><span class="iconify text-moss" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 1</span><span class="text-xs text-charcoal/40 ml-2">Feb 27</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong class="text-charcoal">78 → 42</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong class="text-charcoal">High → Moderate</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">78</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">42</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">46%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Medical report analysis. High-density terminology reduced significantly. Reading time cut from 8 min to 4.5 min. Profile: Dyslexia Support.</p>
+        </div>
+      </div>
+
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-moss/8 flex items-center justify-center"><span class="iconify text-moss" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 2</span><span class="text-xs text-charcoal/40 ml-2">Feb 26</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>65 → 35</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>Moderate → Low</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">65</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">35</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">46%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Legal contract clause review. Dense passive voice and legal jargon replaced with plain language. Profile: Default.</p>
+        </div>
+      </div>
+
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-clay/10 flex items-center justify-center"><span class="iconify text-clay" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 3</span><span class="text-xs text-charcoal/40 ml-2">Feb 28</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>82 → 46</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>High → Moderate</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">82</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">46</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">44%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Academic research paper on neuroscience. Highest original complexity score. Multi-layered sentence structures broken into digestible points. Profile: Default.</p>
+        </div>
+      </div>
+
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-moss/8 flex items-center justify-center"><span class="iconify text-moss" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 4</span><span class="text-xs text-charcoal/40 ml-2">Feb 28</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>74 → 39</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>High → Moderate</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">74</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">39</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">47%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Insurance policy fine print simplification. Profile: Dyslexia Support.</p>
+        </div>
+      </div>
+
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-moss/8 flex items-center justify-center"><span class="iconify text-moss" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 5</span><span class="text-xs text-charcoal/40 ml-2">Feb 28</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>69 → 34</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>Moderate → Low</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">69</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">34</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">51%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Tech manual for software configuration. Largest reduction achieved. Profile: ADHD Mode.</p>
+        </div>
+      </div>
+
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-moss/8 flex items-center justify-center"><span class="iconify text-moss" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 6</span><span class="text-xs text-charcoal/40 ml-2">Feb 28</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>71 → 37</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>Moderate → Low</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">71</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">37</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">48%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Pharmaceutical drug information leaflet. Dosage and side-effect language clarified. Profile: Default.</p>
+        </div>
+      </div>
+
+      <div class="history-row rounded-[1.25rem] overflow-hidden border border-moss/10 bg-white">
+        <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-moss/[0.03] transition-colors">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-moss/8 flex items-center justify-center"><span class="iconify text-moss" data-icon="solar:document-text-linear" style="width:.9rem;height:.9rem"></span></div>
+            <div><span class="font-medium text-sm text-charcoal">Session 7</span><span class="text-xs text-charcoal/40 ml-2">Feb 28</span></div>
+          </div>
+          <div class="flex items-center gap-6">
+            <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>76 → 41</strong></span>
+            <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>High → Moderate</strong></span>
+            <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+          </div>
+        </button>
+        <div class="history-row-body">
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">76</p></div>
+            <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">41</p></div>
+            <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">46%</p></div>
+          </div>
+          <p class="text-xs text-charcoal/50 leading-relaxed">Government policy document on housing regulations. Long compound sentences broken into bullet-style clarity. Profile: Default.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ SCRIPTS ══════════ -->
+<script>
+  // Tab switching
+  window.switchMode = function(mode) {
+    const ac=document.getElementById('content-assistive'), lc=document.getElementById('content-learning');
+    const ind=document.getElementById('tab-indicator'), ba=document.getElementById('tab-assistive'), bl=document.getElementById('tab-learning');
+    if(mode==='assistive'){
+      ind.style.transform='translateX(0)';
+      ba.classList.remove('text-charcoal/40'); ba.classList.add('text-charcoal');
+      bl.classList.remove('text-charcoal'); bl.classList.add('text-charcoal/40');
+      ac.classList.remove('opacity-0','translate-y-8','pointer-events-none','z-0'); ac.classList.add('opacity-100','translate-y-0','z-10');
+      lc.classList.remove('opacity-100','translate-y-0','z-10'); lc.classList.add('opacity-0','translate-y-8','pointer-events-none','z-0');
+    } else {
+      ind.style.transform='translateX(100%)';
+      bl.classList.remove('text-charcoal/40'); bl.classList.add('text-charcoal');
+      ba.classList.remove('text-charcoal'); ba.classList.add('text-charcoal/40');
+      lc.classList.remove('opacity-0','translate-y-8','pointer-events-none','z-0'); lc.classList.add('opacity-100','translate-y-0','z-10');
+      ac.classList.remove('opacity-100','translate-y-0','z-10'); ac.classList.add('opacity-0','translate-y-8','pointer-events-none','z-0');
+    }
+  };
+
+  // Modal
+  window.openSimplifier=function(){document.getElementById('simplifier-modal').classList.add('open');document.body.style.overflow='hidden'};
+  window.closeSimplifier=function(){document.getElementById('simplifier-modal').classList.remove('open');document.body.style.overflow=''};
+  document.getElementById('simplifier-modal').addEventListener('click',function(e){if(e.target===this)closeSimplifier()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSimplifier()});
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')runSimplifier()});
+
+  // Dyslexia / Audio
+  let dyslexiaOn=false, audioOn=false;
+  window.toggleDyslexia=function(){
+    dyslexiaOn=!dyslexiaOn;
+    const btn=document.getElementById('dyslexia-btn'), badge=document.getElementById('dyslexia-badge'), out=document.getElementById('simplified-output');
+    if(dyslexiaOn){btn.classList.add('bg-moss','text-cream');badge.classList.add('bg-moss','text-cream');out.style.letterSpacing='.06em';out.style.lineHeight='2.2';out.style.wordSpacing='.18em';}
+    else{btn.classList.remove('bg-moss','text-cream');badge.classList.remove('bg-moss','text-cream');out.style.letterSpacing='';out.style.lineHeight='';out.style.wordSpacing='';}
+  };
+  window.toggleAudio=function(){
+    audioOn=!audioOn;
+    const bars=document.getElementById('wave-bars'), btn=document.getElementById('audio-btn');
+    if(audioOn){bars.classList.add('playing');btn.classList.add('bg-moss','text-cream');
+      const txt=document.getElementById('simplified-output').innerText;
+      if(txt&&txt!=='Simplified text will appear here once you run an analysis.'&&window.speechSynthesis){
+        const u=new SpeechSynthesisUtterance(txt);
+        u.onend=()=>{audioOn=false;bars.classList.remove('playing');btn.classList.remove('bg-moss','text-cream')};
+        window.speechSynthesis.speak(u);
+      }
+    } else {bars.classList.remove('playing');btn.classList.remove('bg-moss','text-cream');if(window.speechSynthesis)window.speechSynthesis.cancel();}
+  };
+
+  // Loading state
+  function setLoading(on){
+    const btn=document.getElementById('simplify-btn');
+    if(on){
+      btn.innerHTML='<span class="flex items-center gap-2"><span class="w-3 h-3 border-2 border-cream border-t-transparent rounded-full animate-spin"></span>Analysing...</span>';
+      btn.disabled=true;
+      document.getElementById('simplified-output').innerHTML='<div><div class="shimmer w-full"></div><div class="shimmer w-4/5"></div><div class="shimmer w-3/5"></div></div>';
+      resetMetrics();
+    } else {btn.innerHTML='<span>Simplify text</span>';btn.disabled=false;}
+  }
+  function resetMetrics(){
+    ['score-val','reading-time-val','difficulty-val','reduction-val'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('score-bar').style.width='0%';
+    document.getElementById('score-badge').textContent='PENDING';
+    document.getElementById('score-badge').className='text-xs font-medium px-3 py-1 rounded-full bg-charcoal/8 text-charcoal/50 border border-charcoal/10';
+    document.getElementById('intensity-bar').style.width='0%';
+    document.getElementById('intensity-val').textContent='—';
+    document.getElementById('impact-summary').textContent='Run a simplification to see the cognitive impact analysis and personalised recommendations.';
+    document.getElementById('keywords-section').style.display='none';
+  }
+  function applyMetrics(d){
+    document.getElementById('score-val').textContent=d.originalScore;
+    document.getElementById('score-bar').style.width=d.originalScore+'%';
+    const diff=d.difficulty.toLowerCase();
+    const bc={high:'bg-red-50 text-red-600 border-red-200',moderate:'bg-clay/10 text-clay border-clay/20',low:'bg-moss/10 text-moss border-moss/20'};
+    document.getElementById('score-badge').textContent=diff.toUpperCase();
+    document.getElementById('score-badge').className='text-xs font-medium px-3 py-1 rounded-full border '+(bc[diff]||bc.moderate);
+    document.getElementById('reading-time-val').textContent=d.readingTime;
+    document.getElementById('difficulty-val').textContent=d.difficulty;
+    document.getElementById('reduction-val').textContent=d.reduction+'%';
+    document.getElementById('intensity-bar').style.width=d.intensity+'%';
+    document.getElementById('intensity-val').textContent=d.intensity+' / 100';
+    document.getElementById('impact-summary').textContent=d.impactSummary;
+    if(d.keywords&&d.keywords.length){
+      document.getElementById('keywords-section').style.display='block';
+      document.getElementById('keywords-list').innerHTML=d.keywords.map(k=>`<span class="text-[11px] px-3 py-1 rounded-full bg-moss/8 text-moss border border-moss/15 font-medium">${k}</span>`).join('');
+    }
+  }
+
+  // Main API call
+  window.runSimplifier=async function(){
+    const text=document.getElementById('input-text').value.trim();
+    if(!text){alert('Please enter some text to simplify.');return;}
+    const profile=document.getElementById('profile-select').value;
+    setLoading(true);
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-20250514',
+          max_tokens:1000,
+          system:`You are a cognitive accessibility AI. Return ONLY valid JSON (no markdown, no extra text):
+{"simplifiedText":"plain-language rewrite","originalScore":<1-100>,"readingTime":"<e.g. 3 min>","difficulty":"<High|Moderate|Low>","reduction":<% integer>,"intensity":<1-100>,"impactSummary":"2-3 sentence analysis","keywords":["up to 6 key terms"]}
+Reading profile: ${profile}.`,
+          messages:[{role:'user',content:text}]
+        })
+      });
+      const data=await res.json();
+      const raw=data.content.map(b=>b.text||'').join('');
+      const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+      document.getElementById('simplified-output').textContent=parsed.simplifiedText;
+      applyMetrics(parsed);
+      addLiveSession(parsed);
+    }catch(err){
+      document.getElementById('simplified-output').textContent='Error: Could not reach the API. Please try again.';
+      console.error(err);
+    }finally{setLoading(false);}
+  };
+
+  // Add live session to history
+  const liveSessions=[];
+  function addLiveSession(r){
+    liveSessions.unshift(r);
+    const n=liveSessions.length;
+    const dateStr=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const div=document.createElement('div');
+    div.className='history-row rounded-[1.25rem] overflow-hidden border border-clay/25 bg-white';
+    div.innerHTML=`
+      <button onclick="toggleHistory(this)" class="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-clay/[0.03] transition-colors">
+        <div class="flex items-center gap-4">
+          <div class="w-8 h-8 rounded-full bg-clay/10 flex items-center justify-center"><span class="iconify text-clay" data-icon="solar:magic-stick-3-linear" style="width:.9rem;height:.9rem"></span></div>
+          <div><span class="font-medium text-sm text-charcoal">Live Session ${n}</span><span class="text-xs text-clay font-medium ml-2">● New</span><span class="text-xs text-charcoal/40 ml-2">${dateStr}</span></div>
+        </div>
+        <div class="flex items-center gap-6">
+          <span class="text-xs text-charcoal/60 hidden sm:block">Score: <strong>${r.originalScore} → ${r.intensity}</strong></span>
+          <span class="text-xs text-charcoal/60 hidden sm:block">Difficulty: <strong>${r.difficulty} → ${r.intensity<40?'Low':'Moderate'}</strong></span>
+          <span class="iconify history-chevron text-charcoal/40" data-icon="solar:alt-arrow-down-linear" style="width:1rem;height:1rem"></span>
+        </div>
+      </button>
+      <div class="history-row-body">
+        <div class="grid grid-cols-3 gap-4 mb-4">
+          <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Orig. Score</p><p class="text-lg font-medium text-charcoal">${r.originalScore}</p></div>
+          <div class="bg-clay/8 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Simplified</p><p class="text-lg font-medium text-clay">${r.intensity}</p></div>
+          <div class="bg-moss/5 rounded-xl p-3 text-center"><p class="text-[10px] text-charcoal/40 uppercase tracking-wider mb-1">Reduction</p><p class="text-lg font-medium text-moss">${r.reduction}%</p></div>
+        </div>
+        <p class="text-xs text-charcoal/50 leading-relaxed">${r.impactSummary}</p>
+        ${r.keywords&&r.keywords.length?`<div class="flex flex-wrap gap-2 mt-3">${r.keywords.map(k=>`<span class="text-[11px] px-3 py-1 rounded-full bg-moss/8 text-moss border border-moss/15">${k}</span>`).join('')}</div>`:''}
+      </div>`;
+    document.getElementById('history-list').insertBefore(div,document.getElementById('history-list').firstChild);
+    if(window.Iconify)window.Iconify.scan(div);
+  }
+
+  // History accordion
+  window.toggleHistory=function(btn){
+    const row=btn.closest('.history-row'), body=row.querySelector('.history-row-body'), isOpen=body.classList.contains('open');
+    document.querySelectorAll('.history-row-body.open').forEach(b=>b.classList.remove('open'));
+    document.querySelectorAll('.history-row.expanded').forEach(r=>r.classList.remove('expanded'));
+    if(!isOpen){body.classList.add('open');row.classList.add('expanded');}
+  };
+
+  // GSAP
+  document.addEventListener('DOMContentLoaded',()=>{
+    gsap.registerPlugin(ScrollTrigger);
+    const nav=document.getElementById('navbar');
+    window.addEventListener('scroll',()=>{
+      if(window.scrollY>50){nav.classList.remove('bg-transparent','text-cream','border-transparent');nav.classList.add('bg-white/60','backdrop-blur-md','text-moss','border-moss/10');}
+      else{nav.classList.add('bg-transparent','text-cream','border-transparent');nav.classList.remove('bg-white/60','backdrop-blur-md','text-moss','border-moss/10');}
+    });
+    gsap.fromTo('.hero-anim',{y:40,opacity:0},{y:0,opacity:1,duration:1.2,stagger:.15,ease:'power3.out',delay:.2});
+    gsap.fromTo('.impact-card',{y:50,opacity:0},{y:0,opacity:1,duration:.8,stagger:.15,ease:'power3.out',scrollTrigger:{trigger:'#impact',start:'top 75%'}});
+    gsap.fromTo('.number-reveal',{opacity:0,scale:.5,filter:'blur(10px)'},{opacity:1,scale:1,filter:'blur(0px)',duration:1,ease:'back.out(1.5)',scrollTrigger:{trigger:'.number-reveal',start:'top 85%'}});
+    gsap.fromTo('.history-row',{y:30,opacity:0},{y:0,opacity:1,duration:.5,stagger:.07,ease:'power2.out',scrollTrigger:{trigger:'#history',start:'top 80%'}});
+  });
+</script>
+</body></html>

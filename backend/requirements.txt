@@ -1,0 +1,25 @@
+fastapi==0.110.0
+uvicorn==0.29.0
+
+sqlalchemy==2.0.29
+
+textstat==0.7.3
+# spacy==3.7.4  # Optional; needs C++ build tools on Windows. Uncomment for full NLP.
+
+gtts==2.5.1
+
+requests>=2.28.0
+
+python-dotenv==1.0.1
+keybert==0.9.0
+google-genai>=1.0.0
+
+typer==0.9.0
+click==8.1.7
+
+# --- V2 Simplification Engine ---
+transformers>=4.38.0
+torch>=2.1.0
+sentencepiece>=0.1.99
+sentence-transformers>=2.2.0
+groq>=0.4.0
