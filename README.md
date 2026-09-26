@@ -1,53 +1,36 @@
-# NeuroRead: Adaptive AI Tutoring System
+# NeuroRead (CAD variant): adaptive phonics tutor prototype
 
-NeuroRead is a highly advanced, research-grade multimodal phonic reading platform designed specifically for dyslexic children (ages 4-12). It replaces traditional "rule-based" test engines with an autonomous, continuous learning environment that adapts mathematically to a child's struggles and breakthroughs.
+> This is a one-commit snapshot (6 Apr 2026) of an earlier NeuroRead variant, kept for reference. The maintained project is **[NEUROREAD](https://github.com/panshularora/NEUROREAD)**.
 
-## 🚀 Core Features
+NeuroRead is a reading-practice prototype for dyslexic children. It picks the next exercise with classical learner models, and it simplifies text with an LLM that is checked by a validation step.
 
-### 1. Bayesian Knowledge Tracing (BKT)
-Uses a Hidden Markov Model (Corbett & Anderson, 1994) to probabilistically calculate a child's conceptual understanding based on item slips and learning transitions, instead of relying on a simple percentage score.
+## What is in the code
+| Area | Implementation | Where |
+|---|---|---|
+| Skill tracking | Bayesian Knowledge Tracing (Corbett & Anderson, 1994) with fixed parameters | `backend/app/services/learning/bkt_engine.py` |
+| Item scoring | IRT 2PL ability/difficulty estimate | `services/learning/irt_scorer.py` |
+| Difficulty pacing | ZPD-style "flow" rule: escalate when accuracy is above ~85%, cool down when below ~70% | `services/learning/session_flow.py`, `routes/learning/flow_api.py` |
+| Exercise content | LLM (Groq, Llama 3.3 70B) generation, with a procedural fallback when no API key is set or the call fails | `services/learning/content_generator.py` |
+| Text simplification | Groq Llama 3.3 prompt, then sentence splitting and shortening, then validation (MiniLM embedding similarity against a 0.90 threshold, readability and cognitive-load checks), with a Hugging Face Inference fallback (default `Qwen/Qwen2.5-7B-Instruct`) and a small in-memory TTL cache | `services/simplification_engine.py`, `services/assistive/simplifier.py` |
+| UI | React + Vite, Zustand, dnd-kit drag-and-drop tiles, Framer Motion, TTS read-aloud, per-letter colour coding (e.g., b/d) | `frontend/` |
 
-### 2. Item Response Theory (IRT - 2PL)
-Calibrates item difficulty and the child's true cognitive ability on a continuous scale, seamlessly ignoring false negatives and adjusting to reaction times.
+The learner models use fixed parameters; nothing is trained from data. The 0.90 similarity figure is a **pass/fail threshold**, not a measured accuracy. No evaluation of simplification quality or learning outcomes has been run.
 
-### 3. Vygotsky's Zone of Proximal Development (ZPD)
-Maintains a continuous "flow state." If accuracy runs too high (>85%), it identifies boredom and escalates phase. If time increases and accuracy drops (<70%), it flags "anxiety" and triggers cooldown periods.
-
-### 4. Multimodal Perceptual Engine
-Text is completely interactive, supporting continuous drag-and-drop tiles and text-to-speech auto-reading. Reverses dyslexic character-inversion via constant mapping (`b` returns blue, `p` returns purple).
-
----
-
-## 🛠️ Tech Stack
-
-*   **Frontend**: React, Vite, Tailwind CSS, Framer Motion, Zustand (State), DND-Kit.
-*   **Backend**: Python, FastAPI, NumPy/Machine Learning Standard Library.
-*   **Generative AI**: Groq (Llama Models) for Content Generation and Diagnostic Feedback.
-
----
-
-## 💻 Running the Project Locally
-
-### 1. Run the Backend (FastAPI + AI Brain)
-Navigate into the backend and start the Uvicorn server:
+## Run
 ```bash
-cd backend
-pip install -r requirements.txt
+# backend (needs GROQ_API_KEY in backend/.env; HF_TOKEN optional for the fallback)
+cd backend && pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0
+
+# frontend
+cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
-> Ensure you have created a `.env` in the backend containing your `GROQ_API_KEY`.
+`requirements.txt` pulls in torch, transformers and sentence-transformers for the validation step, so the install is large.
 
-### 2. Run the Frontend (React UI)
-Navigate into the frontend and start the Vite dev server:
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Status and known gaps
+- No automated tests in this snapshot. The BKT and simplification tests live in NEUROREAD.
+- `backend/neuroadapt.db`, `err.txt` and `__pycache__/` are committed and should be removed and git-ignored.
+- Not deployed.
 
-### 3. Usage
-Navigate to `http://localhost:5173` and launch **Learning Mode** to interact directly with the continuous tutor loop.
-
----
-
-*Prepared by Senior Engineering for Production Demo.*
+## Stack
+Python, FastAPI, SQLAlchemy, sentence-transformers, textstat, gTTS, Groq API; React, Vite, Zustand, dnd-kit, Framer Motion.
